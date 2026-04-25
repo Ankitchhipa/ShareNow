@@ -1,0 +1,47 @@
+package org.sharenow.fileshare.model
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+
+class ConnectionPayloadTest {
+
+    @Test
+    fun testEncodeDecode() {
+        val payload = ConnectionPayload(
+            host = "192.168.1.1",
+            port = 8080,
+            deviceName = "Test Device"
+        )
+        val encoded = payload.encode()
+        val decoded = ConnectionPayload.decode(encoded)
+
+        assertNotNull(decoded)
+        assertEquals(payload.host, decoded.host)
+        assertEquals(payload.port, decoded.port)
+        assertEquals(payload.deviceName, decoded.deviceName)
+    }
+
+    @Test
+    fun testDecodeInvalidString() {
+        val invalid = "invalid|string"
+        val decoded = ConnectionPayload.decode(invalid)
+        assertNull(decoded)
+    }
+
+    @Test
+    fun testDeviceNameWithPipe() {
+        val payload = ConnectionPayload(
+            host = "1.2.3.4",
+            port = 1234,
+            deviceName = "Device|Name"
+        )
+        val encoded = payload.encode()
+        val decoded = ConnectionPayload.decode(encoded)
+        
+        assertNotNull(decoded)
+        // Note: encode replaces | with /
+        assertEquals("Device/Name", decoded.deviceName)
+    }
+}

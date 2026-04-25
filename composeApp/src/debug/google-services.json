@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "269207441005",
+    "project_id": "sharenow-test-e7967",
+    "storage_bucket": "sharenow-test-e7967.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:269207441005:android:2c740df39b1f4f16187964",
+        "android_client_info": {
+          "package_name": "org.sharenow"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUJAt1kXzPQWMSnwLYJWYAhWwHAblVFv4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
