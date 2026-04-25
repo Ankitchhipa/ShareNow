@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ShareNow Privacy Policy</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            --bg-1: #081226;
+            --bg-2: #0f1f3c;
+            --glow-1: rgba(0, 214, 255, 0.22);
+            --glow-2: rgba(93, 92, 255, 0.18);
+            --card: rgba(10, 18, 35, 0.74);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --text: #eef4ff;
+            --muted: #b8c6e3;
+            --accent: #66e5ff;
+            --accent-2: #7f8cff;
+            --shadow: 0 24px 70px rgba(2, 10, 24, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, var(--glow-1), transparent 30%),
+                radial-gradient(circle at top right, var(--glow-2), transparent 28%),
+                linear-gradient(160deg, var(--bg-1), var(--bg-2));
+            min-height: 100vh;
+        }
+
+        .shell {
+            width: min(960px, calc(100% - 32px));
+            margin: 32px auto;
+        }
+
+        .hero,
+        .section {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .hero {
+            padding: 32px;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(102, 229, 255, 0.12);
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 18px 0 10px;
+            font-size: clamp(34px, 6vw, 52px);
+            line-height: 1.04;
+        }
+
+        .lead {
+            margin: 0;
+            max-width: 760px;
+            color: var(--muted);
+            font-size: 17px;
+            line-height: 1.8;
+        }
+
+        .meta {
+            margin-top: 18px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .section {
+            padding: 28px;
+        }
+
+        h2 {
+            margin: 0 0 12px;
+            font-size: 24px;
+        }
+
+        p, li {
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        ul {
+            margin: 0;
+            padding-left: 22px;
+        }
+
+        a {
+            color: var(--accent);
+        }
+
+        .note {
+            padding: 18px 20px;
+            border-radius: 18px;
+            border: 1px solid rgba(102, 229, 255, 0.18);
+            background: rgba(102, 229, 255, 0.08);
+        }
+
+        @media (max-width: 640px) {
+            .shell {
+                width: min(100% - 20px, 960px);
+                margin: 20px auto;
+            }
+
+            .hero,
+            .section {
+                border-radius: 20px;
+                padding: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div class="badge">ShareNow Privacy Policy</div>
+            <h1>Your files stay yours.</h1>
+            <p class="lead">
+                ShareNow is built to transfer files directly between devices. This Privacy Policy explains
+                what information the app can access, how that information is used, and when limited technical
+                data may be processed to improve app stability and performance.
+            </p>
+            <p class="meta">Effective date: April 25, 2026</p>
+        </section>
+
+        <div class="grid">
+            <section class="section">
+                <h2>1. Information ShareNow may access</h2>
+                <ul>
+                    <li><strong>Files and file metadata:</strong> When you choose files to send, ShareNow accesses selected file names, file size, and file content only to complete the transfer.</li>
+                    <li><strong>Camera access:</strong> Camera permission is used only to scan QR codes for device connection.</li>
+                    <li><strong>Wi-Fi and local network information:</strong> ShareNow uses Wi-Fi, hotspot, IP address, and port information to discover and connect nearby devices for peer-to-peer transfers.</li>
+                    <li><strong>Device name:</strong> Your device name may be shown to nearby devices during the connection process so that users can identify the correct sender or receiver.</li>
+                    <li><strong>Storage access:</strong> ShareNow uses storage access to read selected files and save received files on your device, including inside the <strong>Downloads/ShareNow</strong> folder on supported Android devices.</li>
+                    <li><strong>App diagnostics and analytics:</strong> ShareNow's Android build may use <strong>Firebase Analytics</strong> and <strong>Firebase Crashlytics</strong> to understand app usage patterns and diagnose crashes or stability issues.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>2. How we use this information</h2>
+                <ul>
+                    <li>To establish direct device-to-device connections.</li>
+                    <li>To transfer files selected by the user.</li>
+                    <li>To save received files on the receiving device.</li>
+                    <li>To show transfer progress, transfer history, and connection status.</li>
+                    <li>To identify and fix crashes, bugs, and reliability issues.</li>
+                    <li>To improve app performance and user experience over time.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>3. How file transfers work</h2>
+                <p>
+                    ShareNow is designed for local file sharing between devices. File content is transferred directly
+                    between participating devices over local network or hotspot-based connection methods. ShareNow does
+                    not sell your files and is not intended to upload your personal files to a remote server as part of
+                    the core transfer experience.
+                </p>
+            </section>
+
+            <section class="section">
+                <h2>4. Third-party services</h2>
+                <p>
+                    ShareNow may use Google Firebase services in supported builds, including:
+                </p>
+                <ul>
+                    <li><strong>Firebase Analytics</strong> for aggregated app usage insights.</li>
+                    <li><strong>Firebase Crashlytics</strong> for crash reporting and technical diagnostics.</li>
+                </ul>
+                <p>
+                    These services may process technical information such as device model, operating system version,
+                    app version, crash logs, and usage events according to Google's own privacy practices.
+                </p>
+            </section>
+
+            <section class="section">
+                <h2>5. Data sharing</h2>
+                <p>
+                    We do not sell personal data. Information may be shared only in these limited cases:
+                </p>
+                <ul>
+                    <li>With the other device you intentionally connect to for file transfer.</li>
+                    <li>With service providers such as Firebase for analytics and crash reporting.</li>
+                    <li>When required by law, regulation, legal process, or to protect users and the app.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>6. Data retention</h2>
+                <ul>
+                    <li>Files you receive are stored on your device until you delete them.</li>
+                    <li>Transfer history shown inside the app may reflect files saved on your device.</li>
+                    <li>Diagnostic or analytics information handled by third-party services may be retained under those providers' policies.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>7. Permissions used by ShareNow</h2>
+                <ul>
+                    <li><strong>Camera:</strong> To scan QR codes.</li>
+                    <li><strong>Photos, media, and files / storage:</strong> To read files you choose and save received files.</li>
+                    <li><strong>Wi-Fi and nearby network access:</strong> To create and manage local file-sharing connections.</li>
+                    <li><strong>Notifications:</strong> To show transfer progress and completion status.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>8. Security</h2>
+                <p>
+                    We take reasonable steps to protect connection data, transfer sessions, and stored files.
+                    However, no software or network method can guarantee absolute security. You should only connect
+                    to devices you trust and review file selections before sending.
+                </p>
+            </section>
+
+            <section class="section">
+                <h2>9. Children's privacy</h2>
+                <p>
+                    ShareNow is not directed to children under 13, and we do not knowingly collect personal information
+                    from children through the app's core file-sharing features.
+                </p>
+            </section>
+
+            <section class="section">
+                <h2>10. Your choices</h2>
+                <ul>
+                    <li>You can deny optional permissions, though some features may stop working.</li>
+                    <li>You can delete received files from your device at any time.</li>
+                    <li>You can stop using the app whenever you choose.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>11. Changes to this policy</h2>
+                <p>
+                    This Privacy Policy may be updated from time to time to reflect app changes, legal requirements,
+                    or improved explanations. The updated version will be posted at this same URL with a revised
+                    effective date.
+                </p>
+            </section>
+
+            <section class="section">
+                <h2>12. Contact</h2>
+                <div class="note">
+                    <p style="margin: 0;">
+                        For privacy questions about ShareNow, contact the developer through the GitHub project page:
+                        <a href="https://github.com/Ankitchhipa/ShareNow">github.com/Ankitchhipa/ShareNow</a>
+                    </p>
+                </div>
+            </section>
+        </div>
+    </main>
+</body>
+</html>
