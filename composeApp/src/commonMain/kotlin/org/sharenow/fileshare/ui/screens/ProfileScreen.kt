@@ -1,5 +1,6 @@
 package org.sharenow.fileshare.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,8 +23,12 @@ import org.sharenow.fileshare.ui.components.GlassCard
 import org.sharenow.fileshare.ui.theme.*
 import org.sharenow.getPlatform
 
+private const val PRIVACY_POLICY_URL = "https://ankitchhipa.github.io/ShareNow/privacy-policy.html"
+
 @Composable
 fun ProfileScreen(deviceName: String) {
+    val uriHandler = LocalUriHandler.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -130,9 +136,11 @@ fun ProfileScreen(deviceName: String) {
             GlassCard {
                 SettingsItem(icon = Icons.Default.Folder, label = "Download Path", value = "/Download/Share Now")
                 Divider(modifier = Modifier.padding(vertical = 12.dp), color = BackgroundLight)
-                SettingsItem(icon = Icons.Default.Shield, label = "Privacy & Security")
-                Divider(modifier = Modifier.padding(vertical = 12.dp), color = BackgroundLight)
-                SettingsItem(icon = Icons.Default.Help, label = "Help & Support")
+                SettingsItem(
+                    icon = Icons.Default.Shield,
+                    label = "Privacy Policy",
+                    onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) }
+                )
                 Divider(modifier = Modifier.padding(vertical = 12.dp), color = BackgroundLight)
                 SettingsItem(icon = Icons.Default.Info, label = "About Share Now", value = getAppVersion())
             }
@@ -147,10 +155,19 @@ fun SettingsItem(
     icon: ImageVector, 
     label: String, 
     value: String? = null,
-    iconColor: Color = PrimaryBlue
+    iconColor: Color = PrimaryBlue,
+    onClick: (() -> Unit)? = null
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {

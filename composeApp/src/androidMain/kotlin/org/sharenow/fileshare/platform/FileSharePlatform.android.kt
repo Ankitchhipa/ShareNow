@@ -342,11 +342,6 @@ private fun readPermissionState(context: Context): PermissionUiState {
         networkPermissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
     }
     val networkGranted = networkPermissions.all { ContextCompat.checkSelfPermission(context, it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
-    val allFilesGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        android.os.Environment.isExternalStorageManager()
-    } else {
-        true
-    }
     val notificationsGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
     } else {
@@ -356,7 +351,7 @@ private fun readPermissionState(context: Context): PermissionUiState {
         cameraGranted = cameraGranted,
         storageGranted = storageGranted,
         networkGranted = networkGranted,
-        allFilesGranted = allFilesGranted,
+        allFilesGranted = true,
         notificationsGranted = notificationsGranted,
     )
 }

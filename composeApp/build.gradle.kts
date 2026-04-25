@@ -1,5 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -8,6 +9,18 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.googleServices)
     alias(libs.plugins.firebaseCrashlytics)
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+
+fun localOrEnv(propertyName: String, envName: String = propertyName): String? {
+    return localProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envName)?.takeIf { it.isNotBlank() }
 }
 
 kotlin {
@@ -98,10 +111,17 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("/Users/ankitchhipa/AndroidStudioProjects/Xherit/sharenow.jks")
-            storePassword = "sharenow12349"
-            keyAlias = "ShareNow"
-            keyPassword = "sharenow12349"
+            val storeFilePath = localOrEnv("SHARENOW_STORE_FILE")
+            val storePasswordValue = localOrEnv("SHARENOW_STORE_PASSWORD")
+            val keyAliasValue = localOrEnv("SHARENOW_KEY_ALIAS")
+            val keyPasswordValue = localOrEnv("SHARENOW_KEY_PASSWORD")
+
+            if (storeFilePath != null) {
+                storeFile = file(storeFilePath)
+            }
+            storePassword = storePasswordValue
+            keyAlias = keyAliasValue
+            keyPassword = keyPasswordValue
         }
     }
 
