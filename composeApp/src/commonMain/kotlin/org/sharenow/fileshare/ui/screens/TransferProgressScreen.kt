@@ -191,7 +191,11 @@ fun TransferProgressScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(transferItems) { item ->
-                            TransferFileRow(item = item,currentFileTransferredLabel = currentFileTransferredLabel, currentFileSizeLabel = currentFileSizeLabel)
+                            TransferFileRow(item = item,currentFileTransferredLabel = if (item.status == TransferFileStatus.Transferring) {
+                                currentFileTransferredLabel
+                            } else {
+                                null
+                            })
                         }
                     }
                 }
@@ -215,7 +219,7 @@ fun TransferProgressScreen(
 }
 
 @Composable
-private fun TransferFileRow(item: TransferFileItem, currentFileTransferredLabel: String, currentFileSizeLabel: String) {
+private fun TransferFileRow(item: TransferFileItem, currentFileTransferredLabel: String?) {
     val accent = when (item.status) {
         TransferFileStatus.Completed -> AccentGreen
         TransferFileStatus.Transferring -> SecondaryBlue
@@ -258,14 +262,27 @@ private fun TransferFileRow(item: TransferFileItem, currentFileTransferredLabel:
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(4.dp))
+
+            val sizeDisplay = when (item.status) {
+                TransferFileStatus.Completed -> formatTransferSize(item.sizeInBytes) // Show total size
+                TransferFileStatus.Transferring -> "${currentFileTransferredLabel ?: "0 B"} / ${formatTransferSize(item.sizeInBytes)}"
+                TransferFileStatus.Pending -> formatTransferSize(item.sizeInBytes) // Show total size
+            }
+
             Text(
-                text = "$currentFileTransferredLabel/${formatTransferSize(item.sizeInBytes)}",
+                text = sizeDisplay,
                 style = MaterialTheme.typography.labelMedium,
                 color = TextGray
             )
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { item.progress },
+                progress = {
+                    when(item.status) {
+                        TransferFileStatus.Completed -> 1f
+                        TransferFileStatus.Transferring -> item.progress
+                        TransferFileStatus.Pending -> 0f
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().height(5.dp),
                 color = accent,
                 trackColor = accent.copy(alpha = 0.12f),

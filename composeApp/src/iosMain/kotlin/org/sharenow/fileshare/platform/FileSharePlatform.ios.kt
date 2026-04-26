@@ -21,6 +21,7 @@ import platform.Foundation.NSBundle
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.timeIntervalSince1970
+import platform.UIKit.UIApplication
 import platform.UIKit.UIDevice
 
 actual fun currentDeviceName(): String = UIDevice.currentDevice.name
@@ -36,6 +37,8 @@ actual suspend fun streamFileChunks(
 ) = Unit
 
 actual fun saveChunkToFile(path: String, chunk: ByteArray, append: Boolean) {}
+
+actual fun closeSavedFile(path: String) {}
 
 actual fun getTemporaryFilePath(fileName: String): String = ""
 

@@ -4,6 +4,7 @@ import org.sharenow.fileshare.model.ReceivedFile
 import org.sharenow.fileshare.model.SharedFile
 import org.sharenow.fileshare.model.TransferProgress
 import org.sharenow.fileshare.platform.PlatformSocket
+import org.sharenow.fileshare.platform.closeSavedFile
 import org.sharenow.fileshare.platform.getTemporaryFilePath
 import org.sharenow.fileshare.platform.saveChunkToFile
 import org.sharenow.fileshare.platform.streamFileChunks
@@ -149,25 +150,29 @@ class TransferManager {
         metadataList.forEachIndexed { index, meta ->
             val tempPath = getTemporaryFilePath(meta.name)
             var offset = 0L
-            while (offset < meta.sizeInBytes) {
-                val nextRead = minOf(CHUNK_SIZE.toLong(), meta.sizeInBytes - offset).toInt()
-                val chunk = socket.readExactly(nextRead)
-                saveChunkToFile(tempPath, chunk, append = offset > 0)
-                offset += chunk.size
-                transferred += chunk.size
-                lastProgressAt = emitProgressIfNeeded(
-                    onProgress = onProgress,
-                    currentFileName = meta.name,
-                    bytesTransferred = transferred,
-                    totalBytes = totalBytes,
-                    currentIndex = index + 1,
-                    totalCount = metadataList.size,
-                    startTime = startTime,
-                    currentFileBytesTransferred = offset,
-                    currentFileSize = meta.sizeInBytes,
-                    lastProgressAt = lastProgressAt,
-                    force = offset >= meta.sizeInBytes
-                )
+            try {
+                while (offset < meta.sizeInBytes) {
+                    val nextRead = minOf(CHUNK_SIZE.toLong(), meta.sizeInBytes - offset).toInt()
+                    val chunk = socket.readExactly(nextRead)
+                    saveChunkToFile(tempPath, chunk, append = offset > 0)
+                    offset += chunk.size
+                    transferred += chunk.size
+                    lastProgressAt = emitProgressIfNeeded(
+                        onProgress = onProgress,
+                        currentFileName = meta.name,
+                        bytesTransferred = transferred,
+                        totalBytes = totalBytes,
+                        currentIndex = index + 1,
+                        totalCount = metadataList.size,
+                        startTime = startTime,
+                        currentFileBytesTransferred = offset,
+                        currentFileSize = meta.sizeInBytes,
+                        lastProgressAt = lastProgressAt,
+                        force = offset >= meta.sizeInBytes
+                    )
+                }
+            } finally {
+                closeSavedFile(tempPath)
             }
             receivedFiles += meta.copy(savedPath = tempPath)
         }
@@ -251,7 +256,7 @@ class TransferManager {
     }
 
     private companion object {
-        const val CHUNK_SIZE = 256 * 1024
+        const val CHUNK_SIZE = 512 * 1024
         const val PROGRESS_UPDATE_INTERVAL_MS = 120L
         const val TRANSFER_COMPLETE_ACK = 0x53484F4B
     }

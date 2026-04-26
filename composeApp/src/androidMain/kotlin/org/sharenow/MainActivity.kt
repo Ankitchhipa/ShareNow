@@ -11,6 +11,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import org.sharenow.fileshare.platform.initializeAndroidFileShare
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        // Use a weak reference to avoid memory leaks
+        var currentInstance: MainActivity? = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(
@@ -21,10 +27,18 @@ class MainActivity : ComponentActivity() {
             )
         )
         super.onCreate(savedInstanceState)
+        currentInstance = this
         initializeAndroidFileShare(this)
 
         setContent {
             App()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (currentInstance == this) {
+            currentInstance = null // Clear it to prevent leaks
         }
     }
 }
@@ -34,3 +48,5 @@ class MainActivity : ComponentActivity() {
 fun AppAndroidPreview() {
     App()
 }
+
+

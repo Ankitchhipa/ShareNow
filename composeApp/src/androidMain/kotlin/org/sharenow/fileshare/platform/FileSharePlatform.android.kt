@@ -20,6 +20,7 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -69,6 +70,7 @@ import org.sharenow.fileshare.model.fileCategoryFromName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.sharenow.MainActivity
 import java.io.File
 import java.io.EOFException
 import java.io.IOException
@@ -88,6 +90,8 @@ private object AndroidFileShareContext {
 
 internal const val TRANSFER_NOTIFICATION_CHANNEL_ID = "share_now_transfer"
 internal const val TRANSFER_NOTIFICATION_ID = 4011
+private const val WIFI_REQUEST_TIMEOUT_MS = 45_000
+private const val SAVED_FILE_BUFFER_SIZE = 1024 * 1024
 
 private var localOnlyHotspot: android.net.wifi.WifiManager.LocalOnlyHotspotReservation? = null
 private var activeWifiNetwork: Network? = null
@@ -96,6 +100,7 @@ private var transferWakeLock: android.os.PowerManager.WakeLock? = null
 private var transferWifiLock: android.net.wifi.WifiManager.WifiLock? = null
 private var startedActivityCount: Int = 0
 private var lifecycleCallbacksRegistered = false
+private val savedFileStreams = java.util.concurrent.ConcurrentHashMap<String, java.io.BufferedOutputStream>()
 
 fun initializeAndroidFileShare(context: Context) {
     AndroidFileShareContext.context = context.applicationContext
@@ -221,22 +226,32 @@ actual suspend fun streamFileChunks(
 }
 
 actual fun saveChunkToFile(path: String, chunk: ByteArray, append: Boolean) {
-    try {
-        if (path.startsWith("content://")) {
+    val stream = savedFileStreams[path] ?: run {
+        if (!append) closeSavedFile(path)
+        val output = if (path.startsWith("content://")) {
             val uri = Uri.parse(path)
             val mode = if (append) "wa" else "w"
-            AndroidFileShareContext.context.contentResolver.openOutputStream(uri, mode)?.use { out ->
-                out.write(chunk)
-            }
-            return
+            AndroidFileShareContext.context.contentResolver.openOutputStream(uri, mode)
+                ?: error("Unable to open received file output stream")
+        } else {
+            java.io.FileOutputStream(File(path), append)
         }
-        val file = File(path)
-        val out = java.io.FileOutputStream(file, append)
-        out.write(chunk)
-        out.close()
-    } catch (e: Exception) {
-        e.printStackTrace()
+        java.io.BufferedOutputStream(output, SAVED_FILE_BUFFER_SIZE).also {
+            savedFileStreams[path] = it
+        }
     }
+    stream.write(chunk)
+}
+
+actual fun closeSavedFile(path: String) {
+    savedFileStreams.remove(path)?.let { stream ->
+        runCatching { stream.flush() }
+        runCatching { stream.close() }
+    }
+}
+
+private fun closeAllSavedFiles() {
+    savedFileStreams.keys.toList().forEach { closeSavedFile(it) }
 }
 
 actual fun getTemporaryFilePath(fileName: String): String {
@@ -459,7 +474,7 @@ actual suspend fun getFilesByCategory(category: org.sharenow.fileshare.model.Fil
             val path = uri.toString()
             
             var thumbnailBytes: ByteArray? = null
-            if (category == org.sharenow.fileshare.model.FileCategory.Images || category == org.sharenow.fileshare.model.FileCategory.Videos) {
+            if (category == FileCategory.Images || category == org.sharenow.fileshare.model.FileCategory.Videos) {
                 try {
                     val uri = android.content.ContentUris.withAppendedId(contentUri, id)
                     val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -471,11 +486,15 @@ actual suspend fun getFilesByCategory(category: org.sharenow.fileshare.model.Fil
                             android.provider.MediaStore.Video.Thumbnails.getThumbnail(context.contentResolver, id, android.provider.MediaStore.Video.Thumbnails.MINI_KIND, null)
                         }
                     }
-                    if (bitmap != null) {
+                    bitmap?.let {
                         val stream = java.io.ByteArrayOutputStream()
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, stream)
+                        it.compress(Bitmap.CompressFormat.JPEG, 70, stream)
                         thumbnailBytes = stream.toByteArray()
+                        it.recycle() // Important: Free memory immediately
                     }
+                } catch (e: java.io.FileNotFoundException) {
+                    // Silently handle: This happens if the file was deleted or is corrupt
+                    thumbnailBytes = null
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -773,6 +792,8 @@ private fun resetAndroidConnectionState() {
     val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
 
+    closeAllSavedFiles()
+
     wifiNetworkCallback?.let {
         runCatching { connectivityManager.unregisterNetworkCallback(it) }
     }
@@ -792,10 +813,17 @@ private fun resetAndroidConnectionState() {
 
 actual fun startLocalHotspot(onSuccess: (String, String) -> Unit, onFailure: (String) -> Unit) {
     val context = AndroidFileShareContext.context
+    // Check for Location Permission first
+    if (ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        onFailure("Location permission is required to start Hotspot")
+        return
+    }
     val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
 
     resetAndroidConnectionState()
-    
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         try {
             wifiManager.startLocalOnlyHotspot(object : android.net.wifi.WifiManager.LocalOnlyHotspotCallback() {
@@ -903,7 +931,7 @@ actual fun connectToWifi(ssid: String, password: String, onSuccess: () -> Unit, 
             }
         }
         wifiNetworkCallback = callback
-        connectivityManager.requestNetwork(request, callback, 8_000)
+        connectivityManager.requestNetwork(request, callback, WIFI_REQUEST_TIMEOUT_MS)
     } else {
         // Fallback for older versions (Android 8/9)
         val wifiConfig = android.net.wifi.WifiConfiguration().apply {
@@ -1046,6 +1074,13 @@ actual fun cancelTransferNotification() {
 
 actual fun beginTransferKeepAlive() {
     val context = AndroidFileShareContext.context
+
+    MainActivity.currentInstance?.let { activity ->
+        activity.runOnUiThread {
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     val serviceIntent = Intent(context, TransferForegroundService::class.java).apply {
         action = TransferForegroundService.ACTION_START
         putExtra(TransferForegroundService.EXTRA_TITLE, "Share Now transfer")
@@ -1076,6 +1111,13 @@ actual fun beginTransferKeepAlive() {
 
 actual fun endTransferKeepAlive() {
     val context = AndroidFileShareContext.context
+
+    MainActivity.currentInstance?.let { activity ->
+        activity.runOnUiThread {
+            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     val serviceIntent = Intent(context, TransferForegroundService::class.java).apply {
         action = TransferForegroundService.ACTION_STOP
     }
@@ -1301,5 +1343,5 @@ private fun Context.findLifecycleOwner(): androidx.lifecycle.LifecycleOwner? = w
 }
 
 actual fun getAppVersion(): String {
-    return BuildConfig.VERSION_NAME
+    return "v${BuildConfig.VERSION_NAME}"
 }

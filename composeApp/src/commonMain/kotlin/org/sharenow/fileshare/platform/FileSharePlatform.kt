@@ -22,6 +22,8 @@ expect suspend fun streamFileChunks(
 
 expect fun saveChunkToFile(path: String, chunk: ByteArray, append: Boolean)
 
+expect fun closeSavedFile(path: String)
+
 expect fun getTemporaryFilePath(fileName: String): String
 
 expect fun generateQrBitmap(content: String, size: Int): ImageBitmap?

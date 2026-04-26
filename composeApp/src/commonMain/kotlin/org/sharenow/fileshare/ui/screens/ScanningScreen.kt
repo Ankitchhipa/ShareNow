@@ -49,7 +49,13 @@ fun ScanningScreen(
     val isReceiver = qrBitmap == null
     var wifiEnabled by remember(isReceiver) { mutableStateOf(if (isReceiver) isWifiEnabled() else true) }
     var hotspotConflictEnabled by remember { mutableStateOf(isSystemHotspotEnabled()) }
-    val showConnectionLoader = isConnecting || (qrBitmap != null && connectionStatus.isNotBlank() && !connectionStatus.contains("Waiting for receiver", ignoreCase = true))
+
+    // To this (Adding a delay/check):
+    val showConnectionLoader by remember(isConnecting, connectionStatus) {
+        derivedStateOf {
+            isConnecting || (qrBitmap != null && connectionStatus.isNotBlank() && !connectionStatus.contains("Waiting for receiver", ignoreCase = true))
+        }
+    }
 
     LaunchedEffect(isConnecting) {
         if (isConnecting) {
