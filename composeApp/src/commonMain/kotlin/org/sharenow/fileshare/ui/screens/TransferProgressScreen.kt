@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalView
 import org.sharenow.fileshare.ui.components.GlassCard
 import org.sharenow.fileshare.model.TransferFileItem
 import org.sharenow.fileshare.model.TransferFileStatus
@@ -45,15 +44,6 @@ fun TransferProgressScreen(
     transferItems: List<TransferFileItem>,
     onCancel: () -> Unit
 ) {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val previousKeepScreenOn = view.keepScreenOn
-        view.keepScreenOn = true
-        onDispose {
-            view.keepScreenOn = previousKeepScreenOn
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()

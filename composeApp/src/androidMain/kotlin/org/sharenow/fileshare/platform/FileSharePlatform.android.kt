@@ -70,9 +70,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.EOFException
+import java.io.IOException
+import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
 import java.util.EnumMap
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -1128,6 +1132,7 @@ actual class PlatformSocket actual constructor() {
     private var delegate: Socket? = null
     private var inputStream: java.io.InputStream? = null
     private var outputStream: java.io.OutputStream? = null
+    private val closed = AtomicBoolean(false)
 
     internal constructor(socket: Socket) : this() {
         delegate = socket
@@ -1135,58 +1140,108 @@ actual class PlatformSocket actual constructor() {
     }
 
     actual suspend fun connect(host: String, port: Int) = withContext(Dispatchers.IO) {
+        close()
+        closed.set(false)
         val network = activeWifiNetwork
         val socket = if (network != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            network.socketFactory.createSocket(host, port)
+            network.socketFactory.createSocket()
         } else {
-            Socket(host, port)
+            Socket()
         }
-        delegate = socket
-        configureSocket(socket)
+        try {
+            socket.connect(InetSocketAddress(host, port), SOCKET_CONNECT_TIMEOUT_MS)
+            delegate = socket
+            configureSocket(socket)
+        } catch (error: Throwable) {
+            runCatching { socket.close() }
+            closed.set(true)
+            throw normalizeSocketError(error)
+        }
     }
 
     actual suspend fun readExactly(byteCount: Int): ByteArray = withContext(Dispatchers.IO) {
+        if (closed.get()) throw IOException("Connection closed")
         val stream = inputStream ?: error("Socket input is not connected")
         val buffer = ByteArray(byteCount)
         var offset = 0
-        while (offset < byteCount) {
-            val bytesRead = stream.read(buffer, offset, byteCount - offset)
-            if (bytesRead == -1) error("Connection closed while reading")
-            offset += bytesRead
+        try {
+            while (offset < byteCount) {
+                val bytesRead = stream.read(buffer, offset, byteCount - offset)
+                if (bytesRead == -1) throw EOFException("Connection closed while reading")
+                offset += bytesRead
+            }
+        } catch (error: Throwable) {
+            if (closed.get()) throw IOException("Connection closed")
+            throw normalizeSocketError(error)
         }
         buffer
     }
 
     actual suspend fun writeFully(bytes: ByteArray) = withContext(Dispatchers.IO) {
+        if (closed.get()) throw IOException("Connection closed")
         val stream = outputStream ?: error("Socket output is not connected")
-        stream.write(bytes)
+        try {
+            stream.write(bytes)
+        } catch (error: Throwable) {
+            if (closed.get()) throw IOException("Connection closed")
+            throw normalizeSocketError(error)
+        }
     }
 
     actual suspend fun flush() = withContext(Dispatchers.IO) {
-        outputStream?.flush()
+        if (closed.get()) return@withContext
+        try {
+            outputStream?.flush()
+        } catch (error: Throwable) {
+            if (closed.get()) return@withContext
+            throw normalizeSocketError(error)
+        }
         Unit
     }
 
     actual fun close() {
+        if (!closed.compareAndSet(false, true)) return
         runCatching { outputStream?.flush() }
+        val socket = delegate
         outputStream = null
         inputStream = null
-        delegate?.let { socket ->
+        delegate = null
+        socket?.let {
             runCatching { socket.shutdownInput() }
             runCatching { socket.shutdownOutput() }
             runCatching { socket.close() }
         }
-        delegate = null
     }
 
     private fun configureSocket(socket: Socket) {
         socket.keepAlive = true
-        socket.tcpNoDelay = false
-        socket.sendBufferSize = 256 * 1024
-        socket.receiveBufferSize = 256 * 1024
-        socket.soTimeout = 120_000
-        inputStream = java.io.BufferedInputStream(socket.getInputStream(), 256 * 1024)
-        outputStream = java.io.BufferedOutputStream(socket.getOutputStream(), 256 * 1024)
+        socket.tcpNoDelay = true
+        socket.reuseAddress = true
+        socket.sendBufferSize = SOCKET_BUFFER_SIZE
+        socket.receiveBufferSize = SOCKET_BUFFER_SIZE
+        socket.soTimeout = SOCKET_READ_TIMEOUT_MS
+        inputStream = java.io.BufferedInputStream(socket.getInputStream(), SOCKET_BUFFER_SIZE)
+        outputStream = java.io.BufferedOutputStream(socket.getOutputStream(), SOCKET_BUFFER_SIZE)
+    }
+
+    private fun normalizeSocketError(error: Throwable): Throwable {
+        val message = error.message.orEmpty()
+        if (error is SocketException && message.contains("Software caused connection abort", ignoreCase = true)) {
+            return IOException("Connection closed by the device network. Reconnect and try again.", error)
+        }
+        if (error is SocketException && message.contains("Broken pipe", ignoreCase = true)) {
+            return IOException("Connection closed by the other device. Reconnect and try again.", error)
+        }
+        if (error is SocketException && message.contains("Socket closed", ignoreCase = true)) {
+            return IOException("Connection closed", error)
+        }
+        return error
+    }
+
+    private companion object {
+        const val SOCKET_CONNECT_TIMEOUT_MS = 6_000
+        const val SOCKET_READ_TIMEOUT_MS = 300_000
+        const val SOCKET_BUFFER_SIZE = 512 * 1024
     }
 }
 

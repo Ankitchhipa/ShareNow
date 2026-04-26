@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -100,9 +102,10 @@ class ConnectionManager {
         val hostCandidates = buildHostCandidates(payload.host)
         var lastError: Throwable? = null
         hostCandidates.forEachIndexed { hostIndex, host ->
-            val socket = PlatformSocket()
             onStatus("Connecting to ${payload.deviceName} on $host…")
             repeat(3) { attempt ->
+                if (!currentCoroutineContext().isActive) return@repeat
+                val socket = PlatformSocket()
                 try {
                     socket.connect(host, payload.port)
                     socketMutex.withLock {
@@ -116,6 +119,7 @@ class ConnectionManager {
                         "Connection attempt ${attempt + 1}/3 failed on $host" +
                             if (hostIndex < hostCandidates.lastIndex || attempt < 2) ", retrying…" else ""
                     )
+                    runCatching { socket.close() }
                     delay(450)
                 }
             }

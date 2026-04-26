@@ -17,6 +17,7 @@ import org.sharenow.fileshare.model.PermissionRequestPurpose
 import org.sharenow.fileshare.model.ReceivedFile
 import org.sharenow.fileshare.model.SharedFile
 import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSBundle
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.timeIntervalSince1970
@@ -165,4 +166,9 @@ actual class PlatformSocket actual constructor() {
     }
     actual suspend fun flush() = Unit
     actual fun close() = Unit
+}
+
+actual fun getAppVersion(): String {
+    return NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String
+        ?: "1.0"
 }

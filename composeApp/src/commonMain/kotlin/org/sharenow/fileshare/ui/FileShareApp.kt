@@ -49,6 +49,7 @@ fun FileShareApp() {
     var previewFile by remember { mutableStateOf<ReceivedFile?>(null) }
     var previewSharedFile by remember { mutableStateOf<SharedFile?>(null) }
     var sentSuccessFiles by remember { mutableStateOf<List<SharedFile>>(emptyList()) }
+    var transferDisconnectRequested by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val connectionManager = remember { ConnectionManager() }
@@ -193,11 +194,13 @@ fun FileShareApp() {
             AppScreen.History -> currentScreen = AppScreen.Home
             AppScreen.Profile -> currentScreen = AppScreen.Home
             AppScreen.Scanning -> {
+                transferDisconnectRequested = true
                 scope.launch { connectionManager.stopServer() }
                 receiveUiState = ReceiveUiState()
                 currentScreen = AppScreen.Home
             }
             AppScreen.Transfer -> {
+                transferDisconnectRequested = true
                 scope.launch { connectionManager.stopServer() }
                 receiveUiState = receiveUiState.copy(isConnecting = false)
                 endTransferKeepAlive()
@@ -205,6 +208,7 @@ fun FileShareApp() {
                 currentScreen = AppScreen.Home
             }
             AppScreen.Success -> {
+                transferDisconnectRequested = true
                 scope.launch { connectionManager.stopServer() }
                 receiveUiState = ReceiveUiState()
                 sendUiState = SendUiState()
@@ -284,6 +288,7 @@ fun FileShareApp() {
                             AppScreen.Selection -> FileSelectionScreen(
                                 onBack = { currentScreen = AppScreen.Home },
                                 onFilesSelected = { files ->
+                                    transferDisconnectRequested = false
                                     selectedFiles = files
                                     currentScreen = AppScreen.Scanning
                                     receiveUiState = ReceiveUiState()
@@ -333,17 +338,20 @@ fun FileShareApp() {
                                                     )
                                                     currentScreen = AppScreen.Success
                                                 } catch (e: Exception) {
-                                                    sendUiState = sendUiState.copy(
-                                                        errorMessage = buildTransferErrorMessage(e),
-                                                        connectionStatus = "Transfer interrupted",
-                                                        isConnected = false
-                                                    )
-                                                    cancelTransferNotification()
-                                                    currentScreen = AppScreen.Scanning
+                                                    if (!transferDisconnectRequested) {
+                                                        sendUiState = sendUiState.copy(
+                                                            errorMessage = buildTransferErrorMessage(e),
+                                                            connectionStatus = "Transfer interrupted",
+                                                            isConnected = false
+                                                        )
+                                                        cancelTransferNotification()
+                                                        currentScreen = AppScreen.Scanning
+                                                    }
                                                 } finally {
                                                     connectionManager.closeConnection(socket)
                                                     connectionManager.stopServer()
                                                     endTransferKeepAlive()
+                                                    transferDisconnectRequested = false
                                                 }
                                             }
                                         )
@@ -365,6 +373,7 @@ fun FileShareApp() {
                                 isConnecting = receiveUiState.isConnecting,
                                 onOpenWifiSettings = if (sendUiState.qrBitmap == null) ({ openWifiSettings() }) else null,
                                 onClose = { 
+                                    transferDisconnectRequested = true
                                     scope.launch { connectionManager.stopServer() }
                                     receiveUiState = ReceiveUiState()
                                     sendUiState = SendUiState()
@@ -372,6 +381,7 @@ fun FileShareApp() {
                                     currentScreen = AppScreen.Home 
                                 },
                                 onDeviceSelected = { payload ->
+                                    transferDisconnectRequested = false
                                     receiveUiState = ReceiveUiState(
                                         scannedPayload = payload,
                                         isConnecting = true,
@@ -423,9 +433,13 @@ fun FileShareApp() {
                                             }
                                         } catch (e: Exception) {
                                             connectionManager.stopServer()
-                                            receiveUiState = receiveUiState.copy(errorMessage = e.message, isConnecting = false)
-                                            cancelTransferNotification()
-                                            currentScreen = AppScreen.Scanning
+                                            if (!transferDisconnectRequested) {
+                                                receiveUiState = receiveUiState.copy(errorMessage = buildTransferErrorMessage(e), isConnecting = false)
+                                                cancelTransferNotification()
+                                                currentScreen = AppScreen.Scanning
+                                            }
+                                        } finally {
+                                            transferDisconnectRequested = false
                                         }
                                     }
                                 }
@@ -461,6 +475,7 @@ fun FileShareApp() {
                                     )
                                 },
                                 onCancel = { 
+                                    transferDisconnectRequested = true
                                     scope.launch { connectionManager.stopServer() }
                                     endTransferKeepAlive()
                                     cancelTransferNotification()
@@ -469,6 +484,7 @@ fun FileShareApp() {
                             )
                             AppScreen.Success -> SuccessScreen(
                                 onDone = { 
+                                    transferDisconnectRequested = true
                                     scope.launch { connectionManager.stopServer() }
                                     receiveUiState = ReceiveUiState()
                                     sendUiState = SendUiState()
@@ -478,6 +494,7 @@ fun FileShareApp() {
                                     currentScreen = AppScreen.Home 
                                 },
                                 onSendMore = { 
+                                    transferDisconnectRequested = true
                                     scope.launch { connectionManager.stopServer() }
                                     receiveUiState = ReceiveUiState()
                                     sendUiState = SendUiState()
@@ -579,6 +596,8 @@ private fun buildTransferItems(
 private fun buildTransferErrorMessage(error: Throwable): String {
     val message = error.message.orEmpty()
     return when {
+        "Software caused connection abort" in message -> "Connection closed while the network was switching. Reconnect both devices and try again."
+        "Connection closed" in message -> "Connection closed. Start a fresh connection and try again."
         "Broken pipe" in message -> "Transfer was interrupted because the connection dropped. Keep both phones awake and retry."
         "Connection reset" in message -> "Connection was lost during transfer. Reconnect both devices and try again."
         "timed out" in message.lowercase() -> "Transfer timed out. Keep both devices unlocked and close to each other, then retry."

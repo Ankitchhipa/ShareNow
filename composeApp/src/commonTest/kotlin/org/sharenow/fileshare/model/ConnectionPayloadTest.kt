@@ -44,4 +44,36 @@ class ConnectionPayloadTest {
         // Note: encode replaces | with /
         assertEquals("Device/Name", decoded.deviceName)
     }
+
+    @Test
+    fun testEncodeDecodeWithHotspotCredentials() {
+        val payload = ConnectionPayload(
+            host = "192.168.43.1",
+            port = 54321,
+            deviceName = "Sender Phone",
+            ssid = "ShareNow-1234",
+            password = "secure-password"
+        )
+
+        val decoded = ConnectionPayload.decode(payload.encode())
+
+        assertNotNull(decoded)
+        assertEquals(payload.host, decoded.host)
+        assertEquals(payload.port, decoded.port)
+        assertEquals(payload.deviceName, decoded.deviceName)
+        assertEquals(payload.ssid, decoded.ssid)
+        assertEquals(payload.password, decoded.password)
+    }
+
+    @Test
+    fun testDecodeLegacyPayloadWithoutHotspotCredentials() {
+        val decoded = ConnectionPayload.decode("10.0.0.4|4567|Old Sender")
+
+        assertNotNull(decoded)
+        assertEquals("10.0.0.4", decoded.host)
+        assertEquals(4567, decoded.port)
+        assertEquals("Old Sender", decoded.deviceName)
+        assertNull(decoded.ssid)
+        assertNull(decoded.password)
+    }
 }
