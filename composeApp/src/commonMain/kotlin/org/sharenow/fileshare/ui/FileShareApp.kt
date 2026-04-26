@@ -51,6 +51,7 @@ fun FileShareApp() {
     var previewSharedFile by remember { mutableStateOf<SharedFile?>(null) }
     var sentSuccessFiles by remember { mutableStateOf<List<SharedFile>>(emptyList()) }
     var transferDisconnectRequested by remember { mutableStateOf(false) }
+    var connectionFlowId by remember { mutableStateOf(0) }
     
     val scope = rememberCoroutineScope()
     val connectionManager = remember { ConnectionManager() }
@@ -176,15 +177,32 @@ fun FileShareApp() {
         }
     }
 
+    suspend fun resetBeforeConnectionScreen(): Int {
+        connectionFlowId += 1
+        transferDisconnectRequested = true
+        connectionManager.stopServer()
+        endTransferKeepAlive()
+        cancelTransferNotification()
+        receiveUiState = ReceiveUiState()
+        sendUiState = SendUiState()
+        sentSuccessFiles = emptyList()
+        previewFile = null
+        previewSharedFile = null
+        delay(250)
+        transferDisconnectRequested = false
+        return connectionFlowId
+    }
+
     fun startPermissionAwareFlow(purpose: PermissionRequestPurpose) {
         pendingPermissionPurpose = purpose
         if (permissionState.hasRequiredPermissionsFor(purpose)) {
             when (purpose) {
                 PermissionRequestPurpose.Send -> currentScreen = AppScreen.Selection
                 PermissionRequestPurpose.Receive -> {
-                    currentScreen = AppScreen.Scanning
-                    receiveUiState = ReceiveUiState()
-                    sendUiState = SendUiState()
+                    scope.launch {
+                        resetBeforeConnectionScreen()
+                        currentScreen = AppScreen.Scanning
+                    }
                 }
                 PermissionRequestPurpose.Check -> Unit
             }
@@ -297,18 +315,22 @@ fun FileShareApp() {
                             AppScreen.Selection -> FileSelectionScreen(
                                 onBack = { currentScreen = AppScreen.Home },
                                 onFilesSelected = { files ->
-                                    transferDisconnectRequested = false
                                     selectedFiles = files
-                                    currentScreen = AppScreen.Scanning
-                                    receiveUiState = ReceiveUiState()
-                                    sendUiState = SendUiState(
-                                        connectionStatus = "Starting hotspot and preparing QR…",
-                                        selectedFiles = files
-                                    )
                                     scope.launch {
+                                        val flowId = resetBeforeConnectionScreen()
+                                        selectedFiles = files
+                                        sendUiState = SendUiState(
+                                            connectionStatus = "Reset complete. Starting hotspot…",
+                                            selectedFiles = files
+                                        )
+                                        currentScreen = AppScreen.Scanning
                                         val payload = connectionManager.startServer(
                                             onStatus = { sendUiState = sendUiState.copy(connectionStatus = it) },
                                             onClientConnected = { socket ->
+                                                if (flowId != connectionFlowId) {
+                                                    connectionManager.closeConnection(socket)
+                                                    return@startServer
+                                                }
                                                 try {
                                                     sendUiState = sendUiState.copy(
                                                         connectionStatus = "Connection complete. Preparing files…",
@@ -364,10 +386,12 @@ fun FileShareApp() {
                                                 }
                                             }
                                         )
-                                        sendUiState = sendUiState.copy(
-                                            qrBitmap = generateQrBitmap(payload.encode(), 512),
-                                            qrValue = payload.encode()
-                                        )
+                                        if (flowId == connectionFlowId) {
+                                            sendUiState = sendUiState.copy(
+                                                qrBitmap = generateQrBitmap(payload.encode(), 512),
+                                                qrValue = payload.encode()
+                                            )
+                                        }
                                     }
                                 },
                                 onPreviewFile = { file ->
@@ -396,18 +420,23 @@ fun FileShareApp() {
                                     currentScreen = AppScreen.Home 
                                 },
                                 onDeviceSelected = { payload ->
-                                    transferDisconnectRequested = false
-                                    receiveUiState = ReceiveUiState(
-                                        scannedPayload = payload,
-                                        isConnecting = true,
-                                        connectionStatus = "Joining hotspot ${payload.ssid ?: payload.deviceName}…"
-                                    )
                                     scope.launch {
+                                        val flowId = resetBeforeConnectionScreen()
+                                        receiveUiState = ReceiveUiState(
+                                            scannedPayload = payload,
+                                            isConnecting = true,
+                                            connectionStatus = "Reset complete. Joining hotspot ${payload.ssid ?: payload.deviceName}…"
+                                        )
                                         try {
                                             val socket = connectionManager.connect(payload) { status ->
+                                                if (flowId != connectionFlowId) return@connect
                                                 receiveUiState = receiveUiState.copy(connectionStatus = status, isConnecting = true, errorMessage = null)
                                             }
                                             try {
+                                                if (flowId != connectionFlowId) {
+                                                    connectionManager.closeConnection(socket)
+                                                    return@launch
+                                                }
                                                 receiveUiState = receiveUiState.copy(
                                                     connectionStatus = "Connection complete. Preparing files…",
                                                     isConnecting = false,
@@ -448,7 +477,7 @@ fun FileShareApp() {
                                             }
                                         } catch (e: Exception) {
                                             connectionManager.stopServer()
-                                            if (!transferDisconnectRequested) {
+                                            if (!transferDisconnectRequested && flowId == connectionFlowId) {
                                                 receiveUiState = receiveUiState.copy(errorMessage = buildTransferErrorMessage(e), isConnecting = false)
                                                 cancelTransferNotification()
                                                 currentScreen = AppScreen.Scanning
