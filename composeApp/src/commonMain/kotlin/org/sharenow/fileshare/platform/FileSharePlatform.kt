@@ -87,6 +87,8 @@ expect fun isSystemHotspotEnabled(): Boolean
 
 expect fun openWifiSettings()
 
+expect fun openHotspotSettings()
+
 expect fun isAppInBackground(): Boolean
 
 expect fun updateTransferNotification(

@@ -967,6 +967,21 @@ actual fun openWifiSettings() {
     runCatching { context.startActivity(intent) }
 }
 
+actual fun openHotspotSettings() {
+    val context = AndroidFileShareContext.context
+    val intents = listOf(
+        android.content.Intent("android.settings.TETHER_SETTINGS"),
+        android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS),
+        android.content.Intent(android.provider.Settings.ACTION_SETTINGS),
+    ).map {
+        it.apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+    }
+
+    intents.firstOrNull { intent ->
+        runCatching { context.startActivity(intent) }.isSuccess
+    }
+}
+
 actual fun isAppInBackground(): Boolean {
     return startedActivityCount <= 0
 }

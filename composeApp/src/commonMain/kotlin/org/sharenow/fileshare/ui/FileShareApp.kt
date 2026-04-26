@@ -26,6 +26,7 @@ import org.sharenow.fileshare.platform.currentDeviceName
 import org.sharenow.fileshare.platform.generateQrBitmap
 import org.sharenow.fileshare.platform.isSystemHotspotEnabled
 import org.sharenow.fileshare.platform.isWifiEnabled
+import org.sharenow.fileshare.platform.openHotspotSettings
 import org.sharenow.fileshare.platform.openWifiSettings
 import org.sharenow.fileshare.platform.showTransferCompleteNotification
 import org.sharenow.fileshare.platform.updateTransferNotification
@@ -139,7 +140,15 @@ fun FileShareApp() {
         AlertDialog(
             onDismissRequest = { },
             confirmButton = {
-                TextButton(onClick = { openWifiSettings() }) {
+                TextButton(
+                    onClick = {
+                        if (receivePreflightIssue.isHotspotIssue()) {
+                            openHotspotSettings()
+                        } else {
+                            openWifiSettings()
+                        }
+                    }
+                ) {
                     Text("Open Settings")
                 }
             },
@@ -371,7 +380,13 @@ fun FileShareApp() {
                                 connectionStatus = if (sendUiState.qrBitmap != null) sendUiState.connectionStatus else receiveUiState.connectionStatus,
                                 errorMessage = receiveUiState.errorMessage ?: sendUiState.errorMessage,
                                 isConnecting = receiveUiState.isConnecting,
-                                onOpenWifiSettings = if (sendUiState.qrBitmap == null) ({ openWifiSettings() }) else null,
+                                onOpenWifiSettings = if (sendUiState.qrBitmap == null) ({
+                                    if (isSystemHotspotEnabled()) {
+                                        openHotspotSettings()
+                                    } else {
+                                        openWifiSettings()
+                                    }
+                                }) else null,
                                 onClose = { 
                                     transferDisconnectRequested = true
                                     scope.launch { connectionManager.stopServer() }
@@ -603,6 +618,11 @@ private fun buildTransferErrorMessage(error: Throwable): String {
         "timed out" in message.lowercase() -> "Transfer timed out. Keep both devices unlocked and close to each other, then retry."
         else -> message.ifBlank { "Transfer failed. Please reconnect and try again." }
     }
+}
+
+private fun String?.isHotspotIssue(): Boolean {
+    return this?.contains("Hotspot", ignoreCase = true) == true ||
+        this?.contains("Tethering", ignoreCase = true) == true
 }
 
 private fun buildTransferNotificationMessage(

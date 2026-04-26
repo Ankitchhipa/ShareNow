@@ -144,6 +144,8 @@ actual fun isSystemHotspotEnabled(): Boolean = false
 
 actual fun openWifiSettings() = Unit
 
+actual fun openHotspotSettings() = Unit
+
 actual fun isAppInBackground(): Boolean = false
 
 actual fun updateTransferNotification(title: String, message: String, progressPercent: Int) = Unit

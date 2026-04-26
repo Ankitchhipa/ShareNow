@@ -310,7 +310,7 @@ fun ScanningScreen(
             Spacer(modifier = Modifier.height(12.dp))
             if (onOpenWifiSettings != null) {
                 OutlinedButton(onClick = onOpenWifiSettings) {
-                    Text("Open Wi-Fi Settings")
+                    Text("Open Settings")
                 }
             }
         }
