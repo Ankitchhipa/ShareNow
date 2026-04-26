@@ -1258,7 +1258,6 @@ actual class PlatformSocket actual constructor() {
 
     actual fun close() {
         if (!closed.compareAndSet(false, true)) return
-        runCatching { outputStream?.flush() }
         val socket = delegate
         outputStream = null
         inputStream = null
@@ -1297,7 +1296,7 @@ actual class PlatformSocket actual constructor() {
 
     private companion object {
         const val SOCKET_CONNECT_TIMEOUT_MS = 6_000
-        const val SOCKET_READ_TIMEOUT_MS = 300_000
+        const val SOCKET_READ_TIMEOUT_MS = 60_000
         const val SOCKET_BUFFER_SIZE = 512 * 1024
     }
 }

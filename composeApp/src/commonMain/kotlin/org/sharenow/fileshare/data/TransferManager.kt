@@ -41,20 +41,23 @@ class TransferManager {
                 socket.writeInt(0)
             }
         }
+        socket.flush()
 
         // 3. Send file contents one by one
         files.forEachIndexed { index, file ->
             var fileSentBytes = 0L
+            var nextSyncAt = nextChunkSyncAt(file.sizeInBytes)
             if (file.bytes != null && file.bytes.isNotEmpty()) {
                 val data = file.bytes
                 var offset = 0
                 while (offset < data.size) {
                     val nextChunkSize = minOf(CHUNK_SIZE, data.size - offset)
                     val packet = data.copyOfRange(offset, offset + nextChunkSize)
-                    socket.writeFully(packet)
+                    socket.writeFramedChunk(packet)
                     totalSentBytes += packet.size
                     fileSentBytes += packet.size
                     offset += packet.size
+                    nextSyncAt = syncWithReceiverIfNeeded(socket, fileSentBytes, file.sizeInBytes, nextSyncAt)
                     lastProgressAt = emitProgressIfNeeded(
                         onProgress = onProgress,
                         currentFileName = file.name,
@@ -71,9 +74,10 @@ class TransferManager {
                 }
             } else if (file.path != null) {
                 streamFileChunks(file.path, CHUNK_SIZE) { packet ->
-                    socket.writeFully(packet)
+                    socket.writeFramedChunk(packet)
                     totalSentBytes += packet.size
                     fileSentBytes += packet.size
+                    nextSyncAt = syncWithReceiverIfNeeded(socket, fileSentBytes, file.sizeInBytes, nextSyncAt)
                     lastProgressAt = emitProgressIfNeeded(
                         onProgress = onProgress,
                         currentFileName = file.name,
@@ -92,10 +96,11 @@ class TransferManager {
                 var offset = 0L
                 while (offset < file.sizeInBytes) {
                     val nextChunkSize = minOf(CHUNK_SIZE.toLong(), file.sizeInBytes - offset).toInt()
-                    socket.writeFully(ByteArray(nextChunkSize))
+                    socket.writeFramedChunk(ByteArray(nextChunkSize))
                     totalSentBytes += nextChunkSize
                     fileSentBytes += nextChunkSize
                     offset += nextChunkSize
+                    nextSyncAt = syncWithReceiverIfNeeded(socket, fileSentBytes, file.sizeInBytes, nextSyncAt)
                     lastProgressAt = emitProgressIfNeeded(
                         onProgress = onProgress,
                         currentFileName = file.name,
@@ -111,6 +116,12 @@ class TransferManager {
                     )
                 }
             }
+            socket.writeInt(FILE_END_MARKER)
+            socket.flush()
+            val fileAck = socket.readInt()
+            if (fileAck != FILE_COMPLETE_ACK) {
+                error("File transfer confirmation failed. Please reconnect both devices and try again.")
+            }
         }
 
         socket.flush()
@@ -125,8 +136,8 @@ class TransferManager {
         onMetadataReceived: (List<ReceivedFile>) -> Unit,
         onProgress: (TransferProgress) -> Unit,
     ): List<ReceivedFile> = withContext(Dispatchers.Default) {
-        val totalBytes = try { socket.readLong() } catch (_: Exception) { 0L }
-        val fileCount = try { socket.readInt() } catch (_: Exception) { 0 }
+        val totalBytes = socket.readLong()
+        val fileCount = socket.readInt()
         val receivedFiles = mutableListOf<ReceivedFile>()
         var transferred = 0L
         val startTime = org.sharenow.fileshare.platform.currentTimeMillis()
@@ -150,13 +161,19 @@ class TransferManager {
         metadataList.forEachIndexed { index, meta ->
             val tempPath = getTemporaryFilePath(meta.name)
             var offset = 0L
+            var nextSyncAt = nextChunkSyncAt(meta.sizeInBytes)
             try {
-                while (offset < meta.sizeInBytes) {
-                    val nextRead = minOf(CHUNK_SIZE.toLong(), meta.sizeInBytes - offset).toInt()
-                    val chunk = socket.readExactly(nextRead)
+                while (true) {
+                    val chunkLength = socket.readInt()
+                    if (chunkLength == FILE_END_MARKER) break
+                    if (chunkLength !in 1..MAX_INCOMING_CHUNK_BYTES) {
+                        error("Invalid transfer packet received. Please reconnect both devices and try again.")
+                    }
+                    val chunk = socket.readExactly(chunkLength)
                     saveChunkToFile(tempPath, chunk, append = offset > 0)
                     offset += chunk.size
                     transferred += chunk.size
+                    nextSyncAt = acknowledgeSenderIfNeeded(socket, offset, meta.sizeInBytes, nextSyncAt)
                     lastProgressAt = emitProgressIfNeeded(
                         onProgress = onProgress,
                         currentFileName = meta.name,
@@ -174,11 +191,51 @@ class TransferManager {
             } finally {
                 closeSavedFile(tempPath)
             }
-            receivedFiles += meta.copy(savedPath = tempPath)
+            socket.writeInt(FILE_COMPLETE_ACK)
+            socket.flush()
+            receivedFiles += meta.copy(sizeInBytes = offset, savedPath = tempPath)
         }
         socket.writeInt(TRANSFER_COMPLETE_ACK)
         socket.flush()
         receivedFiles
+    }
+
+    private suspend fun PlatformSocket.writeFramedChunk(bytes: ByteArray) {
+        writeInt(bytes.size)
+        writeFully(bytes)
+    }
+
+    private suspend fun syncWithReceiverIfNeeded(
+        socket: PlatformSocket,
+        fileSentBytes: Long,
+        fileSize: Long,
+        nextSyncAt: Long,
+    ): Long {
+        if (fileSize <= 0L || fileSentBytes < nextSyncAt) return nextSyncAt
+        socket.flush()
+        val ack = socket.readInt()
+        if (ack != CHUNK_SYNC_ACK) {
+            error("Receiver sync failed. Please reconnect both devices and try again.")
+        }
+        return nextChunkSyncAt(fileSize, fileSentBytes)
+    }
+
+    private suspend fun acknowledgeSenderIfNeeded(
+        socket: PlatformSocket,
+        fileReceivedBytes: Long,
+        fileSize: Long,
+        nextSyncAt: Long,
+    ): Long {
+        if (fileSize <= 0L || fileReceivedBytes < nextSyncAt) return nextSyncAt
+        socket.writeInt(CHUNK_SYNC_ACK)
+        socket.flush()
+        return nextChunkSyncAt(fileSize, fileReceivedBytes)
+    }
+
+    private fun nextChunkSyncAt(fileSize: Long, currentBytes: Long = 0L): Long {
+        if (fileSize <= 0L) return Long.MAX_VALUE
+        val next = ((currentBytes / CHUNK_SYNC_INTERVAL_BYTES) + 1) * CHUNK_SYNC_INTERVAL_BYTES
+        return minOf(next, fileSize)
     }
 
     private suspend fun PlatformSocket.writeInt(value: Int) {
@@ -256,7 +313,12 @@ class TransferManager {
     }
 
     private companion object {
-        const val CHUNK_SIZE = 512 * 1024
+        const val CHUNK_SIZE = 256 * 1024
+        const val MAX_INCOMING_CHUNK_BYTES = 4 * 1024 * 1024
+        const val CHUNK_SYNC_INTERVAL_BYTES = 1024 * 1024L
+        const val CHUNK_SYNC_ACK = 0x53484E4B
+        const val FILE_END_MARKER = 0
+        const val FILE_COMPLETE_ACK = 0x5348464C
         const val PROGRESS_UPDATE_INTERVAL_MS = 120L
         const val TRANSFER_COMPLETE_ACK = 0x53484F4B
     }
